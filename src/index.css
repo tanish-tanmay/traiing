@@ -7,8 +7,20 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+@variant dark (&:where(.dark, .dark *));
+@variant light (&:where(.light, .light *));
+
 body {
   font-family: var(--font-sans);
-  background-color: #050508;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark {
+  background-color: #030305;
   color: #f1f5f9;
+}
+
+body.light {
+  background-color: #f1f5f9;
+  color: #1e293b;
 }

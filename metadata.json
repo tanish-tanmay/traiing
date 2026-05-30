@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Organic Mushroom Farm Live Session System",
+  "description": "A live training system with advanced student secure login, real-time chat, screen protection, device restriction, and AI auto reply management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

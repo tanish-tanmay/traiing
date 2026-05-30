@@ -3,11 +3,22 @@ export interface Session {
   adminId: string;
   title: string;
   description: string;
-  videoUrl: string; // Cloudinary HLS m3u8
+  playbackUrl: string; // HLS m3u8 or embed code or direct URL
+  videoSourceType?: 'upload' | 'embed' | 'hls';
   startTime: string; // ISO string
   durationMinutes: number;
   isActive: boolean;
   createdAt: string;
+  
+  // Real-time Controls
+  chatEnabled?: boolean;
+  autoChatEnabled?: boolean;
+  aiReplyEnabled?: boolean;
+  chatSpeed?: 'slow' | 'medium' | 'fast';
+  targetViewers?: number;
+  targetLikes?: number;
+  currentViewers?: number;
+  currentLikes?: number;
 }
 
 export interface Registration {
@@ -18,6 +29,15 @@ export interface Registration {
   mobile: string;
   joinToken: string;
   registeredAt: string;
+  studentId: string;
+  password: string;
+  deviceId?: string;
+  status?: 'active' | 'blocked';
+  joinTime?: string;
+  isOnline?: boolean;
+  watchingTimeSeconds?: number;
+  deviceInfo?: string;
+  lastActiveAt?: string;
 }
 
 export interface LiveAttendance {
