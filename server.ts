@@ -49,53 +49,54 @@ if (aiApiKey) {
   console.log("No GEMINI_API_KEY found. Server will auto-reply using offline contextual database.");
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
 
-  app.use(express.json());
+app.use(express.json());
 
-  app.get('/api/apivideo-token', async (req, res) => {
-    try {
-      const apiKey = process.env.APIVIDEO_API_KEY || 'whQUXM00kPMcMAM7tAfLsJfR6LfOTSRD2hQFWclxuUY';
+app.get('/api/apivideo-token', async (req, res) => {
+  try {
+    const apiKey = process.env.APIVIDEO_API_KEY || 'whQUXM00kPMcMAM7tAfLsJfR6LfOTSRD2hQFWclxuUY';
 
-      // 1. Get access token
-      const authRes = await fetch('https://sandbox.api.video/auth/api-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey })
-      });
-      const authData = await authRes.json();
-      
-      if (!authData.access_token) {
-        throw new Error('Failed to authenticate with api.video: ' + JSON.stringify(authData));
-      }
-
-      // 2. Create delegated upload token
-      const tokenRes = await fetch('https://sandbox.api.video/upload-tokens', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authData.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ ttl: 3600 })
-      });
-      const tokenData = await tokenRes.json();
-      
-      if (!tokenData.token) {
-        throw new Error('Failed to create upload token: ' + JSON.stringify(tokenData));
-      }
-
-      res.json({ token: tokenData.token });
-    } catch (error: any) {
-      console.error("API Video Token Error:", error);
-      res.status(500).json({ error: error.message });
+    // 1. Get access token
+    const authRes = await fetch('https://sandbox.api.video/auth/api-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey })
+    });
+    const authData = await authRes.json();
+    
+    if (!authData.access_token) {
+      throw new Error('Failed to authenticate with api.video: ' + JSON.stringify(authData));
     }
-  });
 
-  app.get('/api/time', (req, res) => {
-    res.json({ serverTime: Date.now() });
-  });
+    // 2. Create delegated upload token
+    const tokenRes = await fetch('https://sandbox.api.video/upload-tokens', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authData.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ttl: 3600 })
+    });
+    const tokenData = await tokenRes.json();
+    
+    if (!tokenData.token) {
+      throw new Error('Failed to create upload token: ' + JSON.stringify(tokenData));
+    }
+
+    res.json({ token: tokenData.token });
+  } catch (error: any) {
+    console.error("API Video Token Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/time', (req, res) => {
+  res.json({ serverTime: Date.now() });
+});
+
+async function startServer() {
+  const PORT = 3000;
 
   // Start background live sessions simulators
   startSessionSimulators();
@@ -161,6 +162,16 @@ function startSessionSimulators() {
             if (!freshSnap.exists()) return;
             const freshData = freshSnap.data();
 
+            const nowMs = Date.now();
+            const startMs = freshData.startTimeMs || new Date(freshData.startTime).getTime();
+            const durationMin = freshData.durationMinutes || 60;
+            const endMs = startMs + durationMin * 60 * 1000;
+            const isDuringTraining = nowMs >= startMs && nowMs <= endMs;
+
+            if (!isDuringTraining) {
+               return; // Do not simulate metrics if not during training
+            }
+
             const targetV = freshData.targetViewers || 100;
             const targetL = freshData.targetLikes || 35;
 
@@ -200,7 +211,14 @@ function startSessionSimulators() {
             if (!snap.exists()) return;
             const sData = snap.data();
 
-            if (!sData.autoChatEnabled) {
+            const nowMs = Date.now();
+            const startMs = sData.startTimeMs || new Date(sData.startTime).getTime();
+            const durationMin = sData.durationMinutes || 60;
+            const endMs = startMs + durationMin * 60 * 1000;
+
+            const isDuringTraining = nowMs >= startMs && nowMs <= endMs;
+
+            if (!sData.autoChatEnabled || !isDuringTraining) {
               // Idle check again in 5 seconds
               chatTimeout = setTimeout(scheduleNextAutoChat, 5000);
               return;
@@ -250,24 +268,31 @@ function startSessionSimulators() {
 
               const isTriggered = chatDocData.triggerAiReply === true;
 
-              // Process strictly real student questions (not greeting messages or simulated questions)
-              const isQuestionText = chatDocData.text && (
-                chatDocData.text.includes('?') || 
-                /kya|kaise|kab|kitn|kaha|bata|help|doubt|problem|ready|how|what|why|where|when|setup|seed|humid/i.test(chatDocData.text.toLowerCase())
-              );
-              
-              const isRealStudentQ = chatDocData.type === 'real' && (isQuestionText || isTriggered) && !chatDocData.aiReplied && !chatDocData.adminReplied;
+              // Any student message (real or auto) containing text is a candidate
+              const isCandidate = chatDocData.text && 
+                (chatDocData.type === 'real' || chatDocData.type === 'auto') && 
+                !chatDocData.aiReplied && 
+                !chatDocData.adminReplied;
 
-              if (isRealStudentQ) {
+              // Intelligently reply to approximately 5 relevant messages for every 20-30 messages (approx 25% chance)
+              const shouldReply = isCandidate && (chatDocData.forceAiReply || isTriggered || Math.random() < 0.25);
+
+              if (shouldReply) {
                 // Read active session parameters to verify if AI Auto reply is configured
                 const freshSessionSnap = await getDoc(sessionDocRef);
                 if (!freshSessionSnap.exists()) return;
                 const freshSessionData = freshSessionSnap.data();
 
-                if (freshSessionData.aiReplyEnabled || isTriggered) {
-                  // Get delay: if triggered, respond instantly (1s), otherwise between 5 and 45 seconds
-                  const delayMs = isTriggered ? 1000 : (Math.floor(Math.random() * 41) + 5) * 1000;
-                  console.log(`Matching real student question (isTriggered=${isTriggered}): "${chatDocData.text}". AI reply will fire in ${(delayMs/1000).toFixed(0)}s.`);
+                const nowMs = Date.now();
+                const startMs = freshSessionData.startTimeMs || new Date(freshSessionData.startTime).getTime();
+                const durationMin = freshSessionData.durationMinutes || 60;
+                const endMs = startMs + durationMin * 60 * 1000;
+                const isDuringTraining = nowMs >= startMs && nowMs <= endMs;
+
+                if ((freshSessionData.aiReplyEnabled && isDuringTraining) || isTriggered) {
+                  // Natural delay of approximately 20-35 seconds before sending response
+                  const delayMs = isTriggered ? 1000 : (Math.floor(Math.random() * 16) + 20) * 1000;
+                  console.log(`Matching ${chatDocData.type} message (isTriggered=${isTriggered}): "${chatDocData.text}". AI reply will fire in ${(delayMs/1000).toFixed(0)}s.`);
 
                   setTimeout(async () => {
                     try {
@@ -292,11 +317,16 @@ function startSessionSimulators() {
                             contents: `You are answering a student's live chat question as "Trainer Support" (representing Ma'am's assistant).
 CRITICAL RULES:
 1. ONLY answer the student's question directly and concisely.
-2. DO NOT ask questions to Ma'am in the reply.
-3. DO NOT create fake questions from the trainer's side.
-4. DO NOT say things like "Ma'am, Rahul ka question hai..." or "Ma'am, please answer Rahul".
-5. Speak as if you are the trainer support team directly providing the answer in simple, friendly Hinglish (Hindi + English).
-6. Give a highly relevant, concise, and direct explanation. Use 1 or 2 sentences maximum.
+2. MUST start your reply by naturally addressing the student by name tagging, e.g., "@${chatDocData.name} "
+3. DO NOT ask questions to Ma'am in the reply.
+4. DO NOT create fake questions from the trainer's side.
+5. DO NOT say things like "Ma'am, Rahul ka question hai..." or "Ma'am, please answer Rahul".
+6. Speak as if you are the trainer support team directly providing the answer in simple, friendly Hinglish (Hindi + English).
+7. Give a highly relevant, concise, and direct explanation. Use 1 or 2 sentences maximum.
+
+Background Training Context:
+Title: "${freshSessionData.title || ''}"
+Desc: "${freshSessionData.description || ''}"
 
 Student Name: ${chatDocData.name}
 Student Question: "${chatDocData.text}"
@@ -304,14 +334,24 @@ Student Question: "${chatDocData.text}"
 Direct Answer:`,
                           });
                           replyText = result.text?.trim() || "";
-                        } catch (aiErr) {
-                          console.error("Gemini runtime error, falling back:", aiErr);
+                        } catch (aiErr: any) {
+                          const errMsg = String(aiErr?.message || aiErr);
+                          if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+                            console.log(`[AI rate-limit/quota] Gemini is rate-limited. Falling back to offline responses for: "${chatDocData.text}"`);
+                          } else {
+                            console.warn("Gemini runtime API error, falling back:", errMsg);
+                          }
                         }
                       }
 
                       if (!replyText) {
                         // DB Contextual Lookup Fallback
                         replyText = getContextualReply(chatDocData.text);
+                      }
+
+                      // Enforce tagging the student's name if Gemini or Offline bot missed it
+                      if (!replyText.toLowerCase().includes(chatDocData.name.toLowerCase())) {
+                         replyText = `@${chatDocData.name} ${replyText}`;
                       }
 
                       // Update the matched message as replied
@@ -443,5 +483,9 @@ function startRegistrationEmailListener() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
 

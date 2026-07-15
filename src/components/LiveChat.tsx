@@ -258,7 +258,7 @@ export default function LiveChat({
           createdAt: d.createdAt || Date.now(),
           isAdmin: d.isAdmin || d.type === 'admin' || d.type === 'ai',
           avatarColor: displayColor,
-          isSelf: d.isSelf || d.name === studentName,
+          isSelf: d.joinToken === joinToken || (d.name === studentName && d.type === 'real'),
           type: d.type || 'real'
         });
       });
@@ -390,7 +390,7 @@ export default function LiveChat({
           createdAt: Date.now(),
           type: 'real',
           avatarColor: 'bg-green-600',
-          isSelf: true
+          joinToken: joinToken
         });
         setInputText('');
       } catch (err) {
@@ -473,22 +473,10 @@ export default function LiveChat({
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col scrollbar-thin scrollbar-thumb-white/10"
+        className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col scrollbar-width-thin scrollbar-thumb-white/10 overscroll-contain touch-pan-y [webkit-overflow-scrolling:touch]"
         style={{ height: isCustomFullscreen ? '300px' : '280px' }}
       >
-        {messages.length > 5 && !showAll && (
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="w-full py-1.5 px-3 bg-white/5 dark:bg-white/5 hover:bg-white/10 dark:hover:bg-white/10 border border-white/5 rounded-xl text-[10px] sm:text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-            title="Show older collapsed comments"
-          >
-            <Sparkles className="w-3 h-3 text-indigo-400 animate-pulse" />
-            <span>Show {messages.length - 5} older messages</span>
-          </button>
-        )}
-
-        {(showAll || messages.length <= 5 ? messages : messages.slice(messages.length - 5)).map((msg) => (
+        {messages.map((msg) => (
           <div 
             key={msg.id} 
             className={`flex flex-col space-y-1 max-w-[85%] ${msg.isSelf ? 'self-end items-end' : 'self-start'}`}

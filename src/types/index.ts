@@ -5,7 +5,8 @@ export interface Session {
   description: string;
   playbackUrl: string; // HLS m3u8 or embed code or direct URL
   videoSourceType?: 'upload' | 'embed' | 'hls';
-  startTime: string; // ISO string
+  startTime: string; // local ISO string
+  startTimeMs?: number; // UTC timestamp resolving timezone bugs
   durationMinutes: number;
   isActive: boolean;
   createdAt: string;

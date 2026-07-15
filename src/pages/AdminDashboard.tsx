@@ -272,6 +272,7 @@ export default function AdminDashboard() {
     try {
       const updatedFields = {
         startTime: editingSessionData.startTime,
+        startTimeMs: new Date(editingSessionData.startTime).getTime(),
         durationMinutes: editingSessionData.durationMinutes,
         playbackUrl: editingSessionData.playbackUrl,
         videoSourceType: editingSessionData.videoSourceType,
@@ -462,6 +463,7 @@ export default function AdminDashboard() {
     try {
       await sessionService.createSession({
         ...newSession,
+        startTimeMs: new Date(newSession.startTime).getTime(),
         adminId: user.uid,
         isActive: true,
         chatEnabled: newChatEnabled,

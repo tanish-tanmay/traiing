@@ -373,7 +373,7 @@ export default function LiveSession() {
 
   const checkPhase = (sess: Session) => {
     const currentNow = now();
-    const start = new Date(sess.startTime).getTime();
+    const start = sess.startTimeMs || new Date(sess.startTime).getTime();
     const durationMs = sess.durationMinutes * 60 * 1000;
     const end = start + durationMs;
     

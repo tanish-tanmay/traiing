@@ -298,6 +298,20 @@ export default function AdminLiveMonitor() {
     }
   };
 
+  // Clear All Chats Action
+  const handleClearAllChats = async () => {
+    if (!confirm('Are you SUPER sure you want to clear ALL CHATS? This action cannot be reversed and will erase chat history for everyone.')) return;
+    try {
+      const qChats = query(collection(db, 'sessions', session.id, 'chats'));
+      const snapshot = await getDocs(qChats);
+      const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'sessions', session.id, 'chats', docSnap.id)));
+      await Promise.all(deletePromises);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to clear all chats.');
+    }
+  };
+
   // STUDENT MANAGEMENT OPERATIONS
   const handleCopyDetails = (student: Registration) => {
     const text = `STUDENT DETAILS:\nName: ${student.name}\nStudent ID: ${student.studentId}\nPassword: ${student.password}\nUnique URL: ${window.location.origin}/live/${student.joinToken}`;
@@ -611,6 +625,13 @@ export default function AdminLiveMonitor() {
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] px-2 py-0.5 bg-green-500/10 border border-green-500/25 text-green-400 font-bold uppercase rounded-full tracking-wide">Synced</span>
+                  <button
+                    onClick={handleClearAllChats}
+                    className="p-1 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition"
+                    title="Clear All Chats"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => setIsChatMinimized(true)}
                     className="p-1 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition"
